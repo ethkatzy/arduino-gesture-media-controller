@@ -6,9 +6,17 @@ class MediaPlayer {
   private currentIndex = 0;
   private duration: number | null = null;
 
-  async loadPlaylist(files: string[]) {
+  /*async loadPlaylist(files: string[]) {
     this.playlist = files;
     this.currentIndex = 0;
+  }*/
+
+  async addToPlaylist(files: string[]) {
+    this.playlist.push(...files);
+
+    if (!this.sound && this.playlist.length > 0) {
+      this.currentIndex = 0;
+    }
   }
 
   async play() {
@@ -89,6 +97,13 @@ class MediaPlayer {
   async getDuration() {
     return this.duration;
   }
+
+  async getVolume() {
+    if (!this.sound) return 0;
+    const status = await this.sound.getStatusAsync();
+    if (!status.isLoaded) return 0;
+    return status.volume;
+}
 }
 
 export default new MediaPlayer();

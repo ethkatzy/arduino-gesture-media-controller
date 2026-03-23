@@ -10,7 +10,7 @@
 import { Buffer } from "buffer"; 
 global.Buffer = Buffer; 
 import React, { useState, useEffect } from "react"; 
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native"; 
+import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native"; 
 import * as DocumentPicker from "expo-document-picker"; 
 import { Ionicons } from "@expo/vector-icons"; 
 import MediaPlayer from "../media/MediaPlayer"; 
@@ -24,10 +24,11 @@ export default function MainScreen() {
   const [isPlaying, setIsPlaying] = useState(false); 
   const [volume, setVolume] = useState<number>(1); 
   const [duration, setDuration] = useState<number | null>(null); 
+  const [playlist, setPlaylist] = useState<string[]>([]);
   const [songInfo, setSongInfo] = useState<{
-    title: String; 
-    artist: String; 
-    album: String; 
+    title: string; 
+    artist: string; 
+    album: string; 
     artwork?: string}>
     ({ title: "", artist: "", album: "", }); 
   const [position, setPosition] = useState<number>(0); 
@@ -59,11 +60,15 @@ setTimeout(() => {
   }, 500); } 
 
 async function addSong() { 
-  const result = await DocumentPicker.getDocumentAsync({ type: "audio/*", }); 
+  const result = await DocumentPicker.getDocumentAsync({ 
+    type: "audio/*", 
+    multiple: true,
+    copyToCacheDirectory: true,}); 
   if (result.canceled) return; 
-  const file = result.assets[0]; 
-  setFileName(file.name); 
-  await MediaPlayer.loadPlaylist([file.uri]); 
+  const files = result.assets;
+  const uris = files.map((f) => f.uri); 
+  //setFileName(file.name); 
+  await MediaPlayer.addToPlaylist(uris); 
   /*console.log("URI:", file.uri);
   const metadata = await MusicInfo.getMusicInfoAsync(file.uri, { 
       title: true, 
@@ -72,11 +77,13 @@ async function addSong() {
       artwork: true, });
   console.log("Metadata:", metadata);*/
 
-  await MediaPlayer.play(); 
-  const d = await MediaPlayer.getDuration(); 
-  setDuration(d); await MediaPlayer.pause(); 
-  await togglePlay(); //try this 
-  try { 
+  if (!isPlaying) {
+    await MediaPlayer.play();
+    const d = await MediaPlayer.getDuration();
+    setDuration(d);
+    setIsPlaying(true);
+  }  
+  /*try { 
     const metadata = await MusicInfo.getMusicInfoAsync(file.uri, { 
       title: true, 
       artist: true, 
@@ -94,7 +101,7 @@ async function addSong() {
       artist: "Unknown Artist", 
       album: "Unknown Album", 
       artwork: undefined, }); 
-  } } 
+  }*/ } 
   
   function formatDuration(ms: number | null) { 
     if (!ms) return "--:--"; 
@@ -110,46 +117,31 @@ async function addSong() {
     flashButton("play"); 
   } 
 
-  /*async function syncVolume() {
-    if (MediaPlayer.sound) {
-      const status = await MediaPlayer.sound.getStatusAsync();
-      if (status.isLoaded) setVolume(status.volume);
-  }*/
-  
   async function volumeUp() { 
-    await MediaPlayer.volumeUp(); 
-    //await syncVolume();
+    await MediaPlayer.volumeUp();
+    const vol = await MediaPlayer.getVolume();
+    setVolume(vol); 
     flashButton("volUp"); 
   } 
     
   async function volumeDown() { 
     await MediaPlayer.volumeDown(); 
+    const vol = await MediaPlayer.getVolume();
+    setVolume(vol); 
     //await syncVolume();
     flashButton("volDown"); 
   } 
   
   async function nextTrack() { 
     await MediaPlayer.nextTrack(); 
+    const d = await MediaPlayer.getDuration();
+    setDuration(d);
+    setPosition(0);
     flashButton("next"); 
   } 
   
   return ( 
     <View style={styles.container}> 
-      {/* TEMPORARY GESTURE BUTTONS */} 
-      <View style={styles.gestureRow}> 
-        <TouchableOpacity onPress={togglePlay} style={styles.tempButton}> 
-          <Text>P</Text> 
-        </TouchableOpacity> 
-        <TouchableOpacity onPress={volumeUp} style={styles.tempButton}> 
-          <Text>V+</Text> 
-        </TouchableOpacity> 
-        <TouchableOpacity onPress={volumeDown} style={styles.tempButton}> 
-          <Text>V-</Text> 
-        </TouchableOpacity> 
-        <TouchableOpacity onPress={nextTrack} style={styles.tempButton}> 
-          <Text>N</Text> 
-        </TouchableOpacity> 
-      </View> 
 
       {/* ADD SONG */} 
       <TouchableOpacity style={styles.addButton} onPress={addSong}> 
@@ -197,10 +189,17 @@ async function addSong() {
           </View> 
         </View> 
       ); } 
-function ControlButton({ icon, onPress, active }) { 
-  return ( <TouchableOpacity onPress={onPress} style={[styles.controlButton, active && styles.activeButton]} > <Ionicons name={icon} size={32} color="white" /> </TouchableOpacity> 
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+function ControlButton({ icon, onPress, active } : { icon : IoniconName; onPress: () => void; active: boolean; }) { 
+  return ( 
+    <TouchableOpacity onPress={onPress} style={[styles.controlButton, active && styles.activeButton]} > 
+       <Ionicons name={icon} size={32} color="white" /> 
+      {/* <Text>{icon}</Text> */}
+    </TouchableOpacity> 
 
-  ); }
+  ); 
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
