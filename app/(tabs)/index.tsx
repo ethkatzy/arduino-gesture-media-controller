@@ -348,15 +348,25 @@ async function addSong() {
         <Text style={styles.trackTitle} numberOfLines={1} ellipsizeMode="tail">{songInfo.title ||fileName || "No track loaded"}</Text> 
         <Text style={styles.metaText}>{songInfo.artist || "Unknown Artist"}</Text> 
         <Text style={styles.metaText}>{songInfo.album || "Unknown Album"}</Text> 
-        <View style={{ width: 220, alignItems: "center", marginTop: 6 }}> <Slider style={{ width: 220, height: 40 }} minimumValue={0} maximumValue={duration || 1} // fallback to 1 to avoid zero 
-        
-          value={position} minimumTrackTintColor="#4c8bf5" maximumTrackTintColor="#ccc" thumbTintColor="#4c8bf5" 
-          onSlidingComplete={async (val) => { 
-            await MediaPlayer.seekTo(val);
-            setPosition(val); 
-            }} /> 
-          <Text style={styles.durationText}>{formatDuration(position)} / {formatDuration(duration)}</Text> 
-        </View> </View> 
+        <View style={{ width: 220, alignItems: "center", marginTop: 6 }}>
+          <Slider
+            style={{ width: 220, height: 40 }}
+            minimumValue={0}
+            maximumValue={duration || 1}
+            value={position}
+            minimumTrackTintColor="#4c8bf5"
+            maximumTrackTintColor="#ccc"
+            thumbTintColor="#4c8bf5"
+            onSlidingComplete={async (val) => {
+              await MediaPlayer.seekTo(val);
+              setPosition(val);
+            }}
+          />
+          <Text style={styles.durationText}>
+            {formatDuration(position)} / {formatDuration(duration)}
+          </Text>
+        </View>
+      </View>
         
         {/* D-PAD */} 
         <View style={styles.dpadContainer}> 
