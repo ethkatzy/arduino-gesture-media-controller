@@ -98,6 +98,23 @@ class MediaPlayer {
     return this.duration;
   }
 
+  async getPosition() {
+    if (!this.sound) return 0;
+    const status = await this.sound.getStatusAsync();
+    if (!status.isLoaded) return 0;
+    return status.positionMillis;
+  }
+
+  async seekTo(positionMillis: number) {
+    if (!this.sound) return;
+    await this.sound.setPositionAsync(positionMillis);
+  }
+
+  async setVolume(volume: number) {
+    if (!this.sound) return;
+    await this.sound.setVolumeAsync(volume);
+  }
+
   async getVolume() {
     if (!this.sound) return 0;
     const status = await this.sound.getStatusAsync();

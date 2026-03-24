@@ -1,47 +1,212 @@
-//TODO:
-//1. Add ability to load multiple songs into the playlist and skip between them
-//Do we want to have it so songs dont need to be added every time the app is opened? Maybe we can save the playlist to local storage and load it on startup?
-//1.a look at queue?
-//2. Fix metadata reading
-//3. Notification
-//4. BLE integration
-
-
-import { Buffer } from "buffer"; 
-global.Buffer = Buffer; 
-import React, { useState, useEffect } from "react"; 
-import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native"; 
-import * as DocumentPicker from "expo-document-picker"; 
-import { Ionicons } from "@expo/vector-icons"; 
-import MediaPlayer from "../media/MediaPlayer"; 
-import * as MusicInfo from "expo-music-info-2"; 
-import { decode as atob } from "base-64"; 
+import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
-import { Audio } from "expo-av"; 
+import { Buffer } from "buffer";
+import { Audio } from "expo-av";
+import * as DocumentPicker from "expo-document-picker";
+import React, { useEffect, useRef, useState } from "react";
+import { Image, PermissionsAndroid, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { BleManager, Characteristic, Device, Subscription } from "react-native-ble-plx";
+import MediaPlayer from "../media/MediaPlayer";
+global.Buffer = Buffer; 
+
+const TARGET_DEVICE_NAME = "GestureBoard";
+const SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214";
+const GESTURE_CHAR_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214";
+const CONFIDENCE_CHAR_UUID = "19B10002-E8F2-537E-4F6C-D104768A1214";
+
 export default function MainScreen() { 
   const [fileName, setFileName] = useState<string | null>(null); 
   const [activeButton, setActiveButton] = useState<string | null>(null); 
   const [isPlaying, setIsPlaying] = useState(false); 
   const [volume, setVolume] = useState<number>(1); 
   const [duration, setDuration] = useState<number | null>(null); 
-  const [playlist, setPlaylist] = useState<string[]>([]);
-  const [songInfo, setSongInfo] = useState<{
+  const [songInfo] = useState<{
     title: string; 
     artist: string; 
     album: string; 
     artwork?: string}>
     ({ title: "", artist: "", album: "", }); 
   const [position, setPosition] = useState<number>(0); 
-  useEffect(() => { let interval: NodeJS.Timer; async function updatePosition() { 
-    if (MediaPlayer.sound) { 
-      const status = await MediaPlayer.sound.getStatusAsync(); 
-      if (status.isLoaded) setPosition(status.positionMillis); 
-    } 
+  const [bleStatus, setBleStatus] = useState<"disconnected" | "scanning" | "connecting" | "connected">("disconnected");
+  const [latestGesture, setLatestGesture] = useState<string>("-");
+  const [latestConfidence, setLatestConfidence] = useState<string>("-");
+  const managerRef = useRef<BleManager | null>(null);
+  const connectedDeviceRef = useRef<Device | null>(null);
+  const gestureSubRef = useRef<Subscription | null>(null);
+  const confidenceSubRef = useRef<Subscription | null>(null);
+  const lastActionRef = useRef<{ gesture: string; timestamp: number }>({ gesture: "", timestamp: 0 });
+
+  async function requestBlePermissions(): Promise<boolean> {
+    if (Platform.OS !== "android") {
+      return true;
+    }
+
+    const apiLevel = Number(Platform.Version);
+    if (apiLevel >= 31) {
+      const result = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ]);
+
+      return (
+        result[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+        result[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED &&
+        result[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED
+      );
+    }
+
+    const locationResult = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+    );
+    return locationResult === PermissionsAndroid.RESULTS.GRANTED;
+  }
+
+  function decodeBase64Value(characteristic: Characteristic | null): string {
+    if (!characteristic?.value) {
+      return "";
+    }
+    return Buffer.from(characteristic.value, "base64")
+      .toString("utf8")
+      .replace(/\0/g, "")
+      .trim();
+  }
+
+  function decodeFloatValue(characteristic: Characteristic | null): number | null {
+    if (!characteristic?.value) return null;
+    const bytes = Buffer.from(characteristic.value, "base64");
+    if (bytes.length < 4) return null;
+    return bytes.readFloatLE(0);
+  }
+
+  function cleanupBleSubscriptions() {
+    gestureSubRef.current?.remove();
+    confidenceSubRef.current?.remove();
+    gestureSubRef.current = null;
+    confidenceSubRef.current = null;
+  }
+
+  async function handleGestureAction(gesture: string) {
+    const now = Date.now();
+    if (lastActionRef.current.gesture === gesture && now - lastActionRef.current.timestamp < 350) {
+      return;
+    }
+    lastActionRef.current = { gesture, timestamp: now };
+
+    if (gesture === "left") {
+      await togglePlay();
+      return;
+    }
+    if (gesture === "up") {
+      await volumeUp();
+      return;
+    }
+    if (gesture === "down") {
+      await volumeDown();
+      return;
+    }
+    if (gesture === "right") {
+      await nextTrack();
+    }
+  }
+
+  async function subscribeToGestureCharacteristics(device: Device) {
+    cleanupBleSubscriptions();
+
+    gestureSubRef.current = device.monitorCharacteristicForService(
+      SERVICE_UUID,
+      GESTURE_CHAR_UUID,
+      async (error, characteristic) => {
+        if (error) {
+          setBleStatus("disconnected");
+          return;
+        }
+        const gesture = decodeBase64Value(characteristic).toLowerCase();
+        if (!gesture) {
+          return;
+        }
+        setLatestGesture(gesture);
+        await handleGestureAction(gesture);
+      }
+    );
+
+    confidenceSubRef.current = device.monitorCharacteristicForService(
+      SERVICE_UUID,
+      CONFIDENCE_CHAR_UUID,
+      (error, characteristic) => {
+        if (error) {
+          return;
+        }
+        const confidence = decodeFloatValue(characteristic);
+        if (confidence !== null) {
+          setLatestConfidence(confidence.toFixed(2));
+        }
+      }
+    );
+  }
+
+  async function startBleIntegration() {
+    const manager = managerRef.current;
+    if (!manager) {
+      return;
+    }
+
+    const hasPermissions = await requestBlePermissions();
+    if (!hasPermissions) {
+      setBleStatus("disconnected");
+      return;
+    }
+
+    cleanupBleSubscriptions();
+  await connectedDeviceRef.current?.cancelConnection().catch(() => undefined);
+    connectedDeviceRef.current = null;
+    setBleStatus("scanning");
+
+    manager.stopDeviceScan();
+    manager.startDeviceScan(null, null, async (error, scannedDevice) => {
+      if (error) {
+        setBleStatus("disconnected");
+        manager.stopDeviceScan();
+        return;
+      }
+
+      const name = scannedDevice?.name ?? scannedDevice?.localName;
+      if (name !== TARGET_DEVICE_NAME || !scannedDevice) {
+        return;
+      }
+
+      manager.stopDeviceScan();
+      setBleStatus("connecting");
+
+      try {
+        const connected = await scannedDevice.connect();
+        await connected.discoverAllServicesAndCharacteristics();
+        connectedDeviceRef.current = connected;
+        await subscribeToGestureCharacteristics(connected);
+        setBleStatus("connected");
+
+        connected.onDisconnected(() => {
+          cleanupBleSubscriptions();
+          connectedDeviceRef.current = null;
+          setBleStatus("disconnected");
+        });
+      } catch {
+        setBleStatus("disconnected");
+      }
+    });
+  }
+  useEffect(() => { let interval: ReturnType<typeof setInterval> | null = null; async function updatePosition() { 
+    const currentPosition = await MediaPlayer.getPosition();
+    setPosition(currentPosition);
     }  
     if (isPlaying) { 
       interval = setInterval(updatePosition, 500); // update twice per second 
     } 
-    return () => clearInterval(interval); 
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    }; 
 }, [isPlaying]); 
 useEffect(() => { 
   Audio.setAudioModeAsync({ 
@@ -52,6 +217,21 @@ useEffect(() => {
     playsInSilentModeIOS: true, 
     playThroughEarpieceAndroid: false, 
   }); }, []); 
+
+  useEffect(() => {
+    managerRef.current = new BleManager();
+    startBleIntegration();
+
+    return () => {
+      const manager = managerRef.current;
+      manager?.stopDeviceScan();
+      cleanupBleSubscriptions();
+      connectedDeviceRef.current?.cancelConnection().catch(() => undefined);
+      connectedDeviceRef.current = null;
+      manager?.destroy();
+      managerRef.current = null;
+    };
+  }, []);
 
 function flashButton(name: string) { 
 setActiveButton(name); 
@@ -66,6 +246,7 @@ async function addSong() {
     copyToCacheDirectory: true,}); 
   if (result.canceled) return; 
   const files = result.assets;
+  setFileName(files[0]?.name ?? null);
   const uris = files.map((f) => f.uri); 
   //setFileName(file.name); 
   await MediaPlayer.addToPlaylist(uris); 
@@ -113,7 +294,7 @@ async function addSong() {
   
   async function togglePlay() { 
     await MediaPlayer.togglePlayPause(); 
-    setIsPlaying(!isPlaying); 
+    setIsPlaying((prev) => !prev); 
     flashButton("play"); 
   } 
 
@@ -148,6 +329,16 @@ async function addSong() {
         <Text style={styles.addText}>Add Song</Text> 
       </TouchableOpacity> 
 
+      <TouchableOpacity style={styles.bleButton} onPress={startBleIntegration}>
+        <Text style={styles.addText}>Reconnect Controller</Text>
+      </TouchableOpacity>
+
+      <View style={styles.bleDebugCard}>
+        <Text style={styles.bleDebugText}>BLE Status: {bleStatus}</Text>
+        <Text style={styles.bleDebugText}>Latest Gesture: {latestGesture}</Text>
+        <Text style={styles.bleDebugText}>Latest Confidence: {latestConfidence}</Text>
+      </View>
+
       {/* FILE NAME */} 
       <View style={styles.songInfoContainer}> 
         <View style={styles.artworkPlaceholder}> 
@@ -161,9 +352,9 @@ async function addSong() {
         
           value={position} minimumTrackTintColor="#4c8bf5" maximumTrackTintColor="#ccc" thumbTintColor="#4c8bf5" 
           onSlidingComplete={async (val) => { 
-            if (MediaPlayer.sound) { 
-              await MediaPlayer.sound.setPositionAsync(val); setPosition(val); 
-            } }} /> 
+            await MediaPlayer.seekTo(val);
+            setPosition(val); 
+            }} /> 
           <Text style={styles.durationText}>{formatDuration(position)} / {formatDuration(duration)}</Text> 
         </View> </View> 
         
@@ -183,8 +374,8 @@ async function addSong() {
         
         {/* VOLUME SLIDER */} 
         <View style={styles.volumeContainer}> 
-          <Text style={{ marginBottom: 4, fontWeight: "bold" }}>Volume</Text> 
-          <Slider style={{ width: 220, height: 40 }} minimumValue={0} maximumValue={1} value={volume} minimumTrackTintColor="#4c8bf5" maximumTrackTintColor="#ccc" thumbTintColor="#4c8bf5" step={0.01} onValueChange={async (val) => { setVolume(val); if (MediaPlayer.sound) { await MediaPlayer.sound.setVolumeAsync(val); } }} /> 
+          <Text style={{ marginBottom: 4, fontWeight: "bold", color: "white" }}>Volume</Text> 
+          <Slider style={{ width: 220, height: 40 }} minimumValue={0} maximumValue={1} value={volume} minimumTrackTintColor="#4c8bf5" maximumTrackTintColor="#ccc" thumbTintColor="#4c8bf5" step={0.01} onValueChange={async (val) => { setVolume(val); await MediaPlayer.setVolume(val); }} /> 
 
           </View> 
         </View> 
@@ -204,6 +395,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
+    backgroundColor: "#111",
   },
 
   gestureRow: {
@@ -229,6 +421,28 @@ const styles = StyleSheet.create({
   addText: {
     color: "white",
     fontWeight: "bold",
+  },
+
+  bleButton: {
+    backgroundColor: "#2a6fbb",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+
+  bleDebugCard: {
+    backgroundColor: "#1b1b1b",
+    borderColor: "#3a3a3a",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
+  },
+
+  bleDebugText: {
+    color: "white",
+    marginBottom: 2,
   },
 
   fileSection: {
