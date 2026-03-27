@@ -1,8 +1,13 @@
 import { Audio } from "expo-av";
 
+export type Track = {
+  uri: string;
+  name: string;
+};
+
 class MediaPlayer {
   private sound: Audio.Sound | null = null;
-  private playlist: string[] = [];
+  private playlist: Track[] = [];
   private currentIndex = 0;
   private duration: number | null = null;
 
@@ -11,8 +16,8 @@ class MediaPlayer {
     this.currentIndex = 0;
   }*/
 
-  async addToPlaylist(files: string[]) {
-    this.playlist.push(...files);
+  async addToPlaylist(files: Track[]) {
+    this.playlist = [...this.playlist, ...files];
 
     if (!this.sound && this.playlist.length > 0) {
       this.currentIndex = 0;
@@ -28,7 +33,7 @@ class MediaPlayer {
     }
 
     const { sound, status } = await Audio.Sound.createAsync(
-      { uri: this.playlist[this.currentIndex] },
+      { uri: this.playlist[this.currentIndex].uri },
       { shouldPlay: true }
     );
 
@@ -120,7 +125,13 @@ class MediaPlayer {
     const status = await this.sound.getStatusAsync();
     if (!status.isLoaded) return 0;
     return status.volume;
-}
+  }
+
+  getCurrentTrack() {
+    if (!this.playlist.length) return null;
+    return this.playlist[this.currentIndex];
+
+  }
 }
 
 export default new MediaPlayer();

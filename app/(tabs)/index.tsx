@@ -4,9 +4,9 @@ import { Buffer } from "buffer";
 import { Audio } from "expo-av";
 import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useRef, useState } from "react";
-import { Image, PermissionsAndroid, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, PermissionsAndroid, Platform, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { BleManager, Characteristic, Device, Subscription } from "react-native-ble-plx";
-import MediaPlayer from "../media/MediaPlayer";
+import MediaPlayer, { type Track } from "../media/MediaPlayer";
 global.Buffer = Buffer; 
 
 const TARGET_DEVICE_NAME = "GestureBoard";
@@ -15,12 +15,16 @@ const GESTURE_CHAR_UUID = "19B10001-E8F2-537E-4F6C-D104768A1214";
 const CONFIDENCE_CHAR_UUID = "19B10002-E8F2-537E-4F6C-D104768A1214";
 
 export default function MainScreen() { 
+  const { width } = useWindowDimensions();
+  const contentWidth = Math.min(width - 48, 340);
+  const controlSize = width < 380 ? 64 : 72;
+  const controlIconSize = width < 380 ? 28 : 32;
   const [fileName, setFileName] = useState<string | null>(null); 
   const [activeButton, setActiveButton] = useState<string | null>(null); 
   const [isPlaying, setIsPlaying] = useState(false); 
   const [volume, setVolume] = useState<number>(1); 
   const [duration, setDuration] = useState<number | null>(null); 
-  const [songInfo] = useState<{
+  const [songInfo, setSongInfo] = useState<{
     title: string; 
     artist: string; 
     album: string; 
@@ -233,7 +237,7 @@ useEffect(() => {
     };
   }, []);
 
-function flashButton(name: string) { 
+  function flashButton(name: string) { 
 setActiveButton(name); 
 setTimeout(() => { 
   setActiveButton(null);
@@ -246,10 +250,14 @@ async function addSong() {
     copyToCacheDirectory: true,}); 
   if (result.canceled) return; 
   const files = result.assets;
-  setFileName(files[0]?.name ?? null);
-  const uris = files.map((f) => f.uri); 
+  const tracks = files.map((f) => ({ uri: f.uri, name: f.name }));
   //setFileName(file.name); 
-  await MediaPlayer.addToPlaylist(uris); 
+  await MediaPlayer.addToPlaylist(tracks); 
+  const current = MediaPlayer.getCurrentTrack();
+  if (current) {
+    setFileName(current.name);
+    await loadMetadata(current);
+  }
   /*console.log("URI:", file.uri);
   const metadata = await MusicInfo.getMusicInfoAsync(file.uri, { 
       title: true, 
@@ -284,6 +292,15 @@ async function addSong() {
       artwork: undefined, }); 
   }*/ } 
   
+async function loadMetadata(track: Track) {
+  const title1 = track.name.replace(/\.[^/.]+$/, "");
+  setSongInfo({
+    title: title1,
+    artist: "Unknown Artist",
+    album: "Unknown Album",
+  });
+}
+
   function formatDuration(ms: number | null) { 
     if (!ms) return "--:--"; 
     const totalSeconds = Math.floor(ms / 1000); 
@@ -315,6 +332,11 @@ async function addSong() {
   
   async function nextTrack() { 
     await MediaPlayer.nextTrack(); 
+    const current = MediaPlayer.getCurrentTrack();
+    if (current) {
+      setFileName(current.name);
+      await loadMetadata(current);
+    }
     const d = await MediaPlayer.getDuration();
     setDuration(d);
     setPosition(0);
@@ -329,10 +351,6 @@ async function addSong() {
         <Text style={styles.addText}>Add Song</Text> 
       </TouchableOpacity> 
 
-      <TouchableOpacity style={styles.bleButton} onPress={startBleIntegration}>
-        <Text style={styles.addText}>Reconnect Controller</Text>
-      </TouchableOpacity>
-
       <View style={styles.bleDebugCard}>
         <Text style={styles.bleDebugText}>BLE Status: {bleStatus}</Text>
         <Text style={styles.bleDebugText}>Latest Gesture: {latestGesture}</Text>
@@ -346,11 +364,11 @@ async function addSong() {
           (<Ionicons name="musical-notes" size={60} color="#888" />)} 
         </View> 
         <Text style={styles.trackTitle} numberOfLines={1} ellipsizeMode="tail">{songInfo.title ||fileName || "No track loaded"}</Text> 
-        <Text style={styles.metaText}>{songInfo.artist || "Unknown Artist"}</Text> 
-        <Text style={styles.metaText}>{songInfo.album || "Unknown Album"}</Text> 
-        <View style={{ width: 220, alignItems: "center", marginTop: 6 }}>
+        {/*<Text style={styles.metaText}>{songInfo.artist || "Unknown Artist"}</Text> 
+        <Text style={styles.metaText}>{songInfo.album || "Unknown Album"}</Text> */}
+        <View style={styles.sliderBlock}>
           <Slider
-            style={{ width: 220, height: 40 }}
+            style={{ width: contentWidth, height: 40 }}
             minimumValue={0}
             maximumValue={duration || 1}
             value={position}
@@ -368,33 +386,57 @@ async function addSong() {
         </View>
       </View>
         
-        {/* D-PAD */} 
-        <View style={styles.dpadContainer}> 
-          <View style={styles.dpadRow}> 
-            <ControlButton icon="volume-high" active={activeButton === "volUp"} onPress={volumeUp} /> 
-          </View> 
-          <View style={styles.dpadRow}> 
-            <ControlButton icon={isPlaying ? "pause" : "play"} active={activeButton === "play"} onPress={togglePlay} /> 
-            <ControlButton icon="play-skip-forward" active={activeButton === "next"} onPress={nextTrack} /> 
-          </View> 
-          <View style={styles.dpadRow}> 
-            <ControlButton icon="volume-low" active={activeButton === "volDown"} onPress={volumeDown} /> 
+        <View style={styles.controlsSection}> 
+          <View style={styles.primaryControlsRow}> 
+            <ControlButton
+              icon={isPlaying ? "pause" : "play"}
+              active={activeButton === "play"}
+              onPress={togglePlay}
+              size={controlSize}
+              iconSize={controlIconSize}
+            /> 
+            <ControlButton
+              icon="play-skip-forward"
+              active={activeButton === "next"}
+              onPress={nextTrack}
+              size={controlSize}
+              iconSize={controlIconSize}
+            /> 
           </View> 
         </View> 
         
         {/* VOLUME SLIDER */} 
         <View style={styles.volumeContainer}> 
           <Text style={{ marginBottom: 4, fontWeight: "bold", color: "white" }}>Volume</Text> 
-          <Slider style={{ width: 220, height: 40 }} minimumValue={0} maximumValue={1} value={volume} minimumTrackTintColor="#4c8bf5" maximumTrackTintColor="#ccc" thumbTintColor="#4c8bf5" step={0.01} onValueChange={async (val) => { setVolume(val); await MediaPlayer.setVolume(val); }} /> 
+          <Slider style={{ width: contentWidth, height: 40 }} minimumValue={0} maximumValue={1} value={volume} minimumTrackTintColor="#4c8bf5" maximumTrackTintColor="#ccc" thumbTintColor="#4c8bf5" step={0.01} onValueChange={async (val) => { setVolume(val); await MediaPlayer.setVolume(val); }} /> 
 
           </View> 
+          <View style={styles.controlsSection}> 
+          <View style={styles.primaryControlsRow}> 
+            <ControlButton
+              icon={"volume-low"}
+              active={activeButton === "volDown"}
+              onPress={volumeDown}
+              size={controlSize}
+              iconSize={controlIconSize}
+            /> 
+            <ControlButton
+              icon={"volume-high"}  
+              active={activeButton === "volUp"}
+              onPress={volumeUp}
+              size={controlSize}
+              iconSize={controlIconSize}
+            /> 
+          </View> 
+        </View> 
+
         </View> 
       ); } 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
-function ControlButton({ icon, onPress, active } : { icon : IoniconName; onPress: () => void; active: boolean; }) { 
+function ControlButton({ icon, onPress, active, size, iconSize } : { icon : IoniconName; onPress: () => void; active: boolean; size: number; iconSize: number; }) { 
   return ( 
-    <TouchableOpacity onPress={onPress} style={[styles.controlButton, active && styles.activeButton]} > 
-       <Ionicons name={icon} size={32} color="white" /> 
+    <TouchableOpacity onPress={onPress} style={[styles.controlButton, { width: size, height: size, borderRadius: size / 2 }, active && styles.activeButton]} > 
+       <Ionicons name={icon} size={iconSize} color="white" /> 
       {/* <Text>{icon}</Text> */}
     </TouchableOpacity> 
 
@@ -433,14 +475,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  bleButton: {
-    backgroundColor: "#2a6fbb",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
   bleDebugCard: {
     backgroundColor: "#1b1b1b",
     borderColor: "#3a3a3a",
@@ -464,22 +498,19 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  dpadContainer: {
-    flex: 1,
-    justifyContent: "center",
+  controlsSection: {
+    marginTop: 8,
+    marginBottom: 8,
+    alignItems: "center",
   },
 
-  dpadRow: {
+  primaryControlsRow: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 20,
-    marginVertical: 15,
+    gap: 24,
   },
 
   controlButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
     backgroundColor: "#333",
     justifyContent: "center",
     alignItems: "center",
@@ -491,7 +522,8 @@ const styles = StyleSheet.create({
 
   songInfoContainer: {
     alignItems: "center",
-    marginBottom: 30,
+    marginBottom: 18,
+    width: "100%",
   },
 
   artworkPlaceholder: {
@@ -520,6 +552,12 @@ const styles = StyleSheet.create({
     color: "white",
   },
 
+  sliderBlock: {
+    width: "100%",
+    alignItems: "center",
+    marginTop: 6,
+  },
+
   progressContainer: {
     width: 200,
     height: 6,
@@ -536,7 +574,7 @@ const styles = StyleSheet.create({
   },
 
   volumeContainer: {
-  alignItems: "center",
-  marginTop: 20,
-},
+    alignItems: "center",
+    marginTop: 10,
+  },
 });
