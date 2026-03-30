@@ -1,53 +1,134 @@
-Run npx expo run:android and then wait for it to load properly
+# Arduino Gesture Media Controller
 
+## Overview
 
-# Welcome to your Expo app 👋
+The Gesture Media Controller is a wearable human-computer interaction system designed to provide hands-free media control. It addresses the problem that users cannot easily control media when their hands are occupied, or when interacting with small touch-screen buttons is difficult — such as for accessibility needs or during physical activity.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The system works by pairing an Arduino Nano 33 BLE Sense (worn on a glove) with an Android app. The Arduino uses its built-in gyroscope and accelerometer to detect the user's hand gesture in real time using a TinyML model, then sends the result to the app over Bluetooth Low Energy. The app maps each gesture to a media action and provides immediate visual feedback through light-up buttons, confirming that the gesture was recognised and the instruction is being carried out.
 
-## Get started
+This prototype demonstrates a practical, accessible alternative to touch-screen media controls — particularly useful during physical activity, or for users who find fine motor interaction with small buttons difficult.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## How It Works
 
-2. Start the app
+A final-year mobile project that lets you control music playback on an Android phone using hand gestures detected by an Arduino Nano 33 BLE Sense running a TinyML model.
 
-   ```bash
-   npx expo start
-   ```
+The Arduino sends gesture classifications over BLE to a React Native (Expo) app. The app interprets the gesture and triggers the corresponding media action.
 
-In the output, you'll find options to open the app in a
+---
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## How It Works
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Arduino (Hardware)
+- An Arduino Nano 33 BLE Sense runs a TinyML inference model (`model.h`) trained in the `TINYML.ipynb` notebook.
+- It captures IMU sensor data, classifies the gesture in real time, and broadcasts the result over BLE as a GATT characteristic.
+- Sketch: `gesture_inference.ino`
 
-## Get a fresh project
+### Mobile App (Software)
+- Built with **Expo SDK 54** + **React Native 0.81.5**, using the New Architecture (`newArchEnabled=true`).
+- Scans for a BLE device named `GestureBoard` on launch and subscribes to gesture + confidence characteristics.
+- Gesture → action mapping:
+  | Gesture | Action |
+  |---------|--------|
+  | Left    | Play / Pause |
+  | Right   | Next Track |
+  | Up      | Volume Up |
+  | Down    | Volume Down |
+- Audio playback handled by `expo-av` via a singleton `MediaPlayer` class (`app/media/MediaPlayer.ts`).
+- Supports adding multiple local audio files and cycling through a playlist.
+- Main screen shows track title, progress slider, duration, play/pause + next buttons, and a volume slider.
+- BLE status, latest gesture, and confidence score are displayed in a live debug card.
 
-When you're ready, run:
+---
 
-```bash
-npm run reset-project
+## Project Structure
+
+```
+gesture_inference.ino   # Arduino sketch
+model.h                 # TinyML model weights (generated from TINYML.ipynb)
+TINYML.ipynb            # Model training notebook
+app/
+  (tabs)/
+    index.tsx           # Main media player + BLE screen
+  media/
+    MediaPlayer.ts      # Audio playback singleton (expo-av)
+  _layout.tsx           # Root navigation layout
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-## Learn more
+## Prerequisites
 
-To learn more about developing your project with Expo, look at the following resources:
+### For the Android app build
+- **Node.js** 18+
+- **Android Studio** (with Android SDK, NDK 27.1.12297006, Build Tools 36)
+- **Java** from Android Studio JBR (`C:\Program Files\Android\Android Studio\jbr`)
+- A physical Android device with **USB debugging enabled** and the Expo development client APK installed
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+> **Windows users**: The Android SDK path must not contain spaces. Map it to a drive letter before building:
+> ```powershell
+> subst S: "C:\Users\YourName\AppData\Local\Android\Sdk"
+> ```
+> Also set `GRADLE_USER_HOME=C:\gradle-home` to avoid Gradle cache path issues.
 
-## Join the community
+### For the Arduino
+- Arduino IDE with the following libraries:
+  - `Arduino_LSM9DS1` (IMU)
+  - `ArduinoBLE`
+  - `TensorFlowLite` (TinyML runtime)
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Running the App
+
+### 1. Install dependencies
+```bash
+npm install
+```
+
+### 2. Generate native Android project
+```bash
+npx expo prebuild --clean
+```
+
+### 3. Build and install the APK on your phone (first time or after native changes)
+
+On Windows, run this in PowerShell from the project directory:
+```powershell
+subst S: "C:\Users\YourName\AppData\Local\Android\Sdk"
+$env:JAVA_HOME  = 'C:\Program Files\Android\Android Studio\jbr'
+$env:Path       = "$env:JAVA_HOME\bin;S:\platform-tools;$env:Path"
+$env:ANDROID_HOME     = 'S:\'
+$env:ANDROID_SDK_ROOT = 'S:\'
+$env:GRADLE_USER_HOME = 'C:\gradle-home'
+$env:_JAVA_OPTIONS    = ''
+adb reverse tcp:8081 tcp:8081
+npx expo run:android --variant debug
+```
+
+### 4. Start the Metro dev server (subsequent runs, APK already installed)
+```powershell
+adb start-server
+adb devices -l
+adb reverse tcp:8081 tcp:8081
+npx expo start --dev-client
+```
+Then open the installed app on your phone — it will connect to Metro automatically over USB.
+
+If using Wi-Fi instead of USB, make sure phone and laptop are on the same network and scan the QR code shown in the Metro output.
+
+---
+
+## Uploading the Arduino Sketch
+
+1. Open `gesture_inference.ino` in the Arduino IDE.
+2. Select board: **Arduino Nano 33 BLE**.
+3. Upload the sketch. The board will start broadcasting BLE as `GestureBoard`.
+4. Open the app on your phone — it will scan and connect automatically.
+
+---
+
+## Branch
+
+Active development branch: `feature/ble-app-integration`
