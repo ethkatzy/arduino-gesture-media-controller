@@ -5,7 +5,7 @@ export type Track = {
   name: string;
 };
 
-class MediaPlayer {
+class MediaPlayerImpl {
   private sound: Audio.Sound | null = null;
   private playlist: Track[] = [];
   private currentIndex = 0;
@@ -134,4 +134,5 @@ class MediaPlayer {
   }
 }
 
-export default new MediaPlayer();
+export { MediaPlayerImpl as MediaPlayerClass };
+export default new MediaPlayerImpl();

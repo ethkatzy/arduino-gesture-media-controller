@@ -6,6 +6,7 @@ import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useRef, useState } from "react";
 import { Image, PermissionsAndroid, Platform, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import { BleManager, Characteristic, Device, Subscription } from "react-native-ble-plx";
+import { isDebounced, resolveGestureAction } from "../gesture/gestureAction";
 import MediaPlayer, { type Track } from "../media/MediaPlayer";
 global.Buffer = Buffer; 
 
@@ -92,25 +93,24 @@ export default function MainScreen() {
 
   async function handleGestureAction(gesture: string) {
     const now = Date.now();
-    if (lastActionRef.current.gesture === gesture && now - lastActionRef.current.timestamp < 350) {
+    if (isDebounced(lastActionRef.current.gesture, lastActionRef.current.timestamp, gesture, now)) {
       return;
     }
     lastActionRef.current = { gesture, timestamp: now };
 
-    if (gesture === "left") {
-      await togglePlay();
-      return;
-    }
-    if (gesture === "up") {
-      await volumeUp();
-      return;
-    }
-    if (gesture === "down") {
-      await volumeDown();
-      return;
-    }
-    if (gesture === "right") {
-      await nextTrack();
+    switch (resolveGestureAction(gesture)) {
+      case "togglePlay":
+        await togglePlay();
+        break;
+      case "volumeUp":
+        await volumeUp();
+        break;
+      case "volumeDown":
+        await volumeDown();
+        break;
+      case "nextTrack":
+        await nextTrack();
+        break;
     }
   }
 

@@ -58,9 +58,9 @@ Right now `getting_data.ino` and `TINYML.ipynb` sit loose at the repo root while
 
 There's currently no test framework and no test files at all. You don't need hardware to test the parts that matter most for a reviewer skimming for engineering rigor:
 
-- [ ] Add **Jest** (`jest-expo` preset is the standard choice for Expo/RN projects).
-- [ ] Unit test `app/media/MediaPlayer.ts` — it's a self-contained wrapper with clear inputs/outputs (play/pause/next/volume/seek), no hardware needed.
-- [ ] Unit test the gesture → action mapping logic in `app/(tabs)/index.tsx` (`handleGestureAction`, including the 350ms debounce) — this is pure logic and one of the more interesting pieces of the project to show tested.
+- [x] Add **Jest** (`jest-expo` preset is the standard choice for Expo/RN projects). Run with `npm test`.
+- [x] Unit test `app/media/MediaPlayer.ts` — self-contained wrapper (play/pause/next/volume/seek), mocked `expo-av`, no hardware needed. Exported the class as `MediaPlayerClass` alongside the existing singleton default export so tests can create isolated instances.
+- [x] Unit test the gesture → action mapping logic — extracted `handleGestureAction`'s mapping and 350ms debounce out of `app/(tabs)/index.tsx` into `app/gesture/gestureAction.ts` (`resolveGestureAction`, `isDebounced`) so it's testable without rendering the component or mocking BLE.
 
 ## 7. CI
 
@@ -71,3 +71,4 @@ There's currently no test framework and no test files at all. You don't need har
 - [ ] Document the training pipeline in a bit more depth: how much data per gesture class, model architecture summary, any accuracy/confusion-matrix numbers from `TINYML.ipynb`.
 - [ ] A short "Known limitations" section in the README (e.g. gesture threshold tuning, BLE range/reliability) — shows self-awareness, which reads well in a portfolio context.
 - [ ] If you want to go further on the "no hardware needed" front: a short write-up or notebook cell showing the TFLite Micro model's accuracy on a held-out test set.
+- [ ] Merge the branches
