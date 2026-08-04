@@ -1,7 +1,14 @@
 {
   "name": "media-controller",
+  "description": "A media player app controlled by hand gestures, recognized on-device by a TinyML model on an Arduino Nano 33 BLE Sense and streamed to the phone over BLE.",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "author": "Ethan Katz",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethkatzy/arduino-gesture-media-controller.git"
+  },
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",

@@ -30,8 +30,18 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# IDE
+.idea/
+
+# accidental artifacts
+bugreport-*.zip
+
 # local env files
 .env*.local
+
+# Claude Code personal notes
+CLAUDE.local.md
+.claude/settings.local.json
 
 # typescript
 *.tsbuildinfo
