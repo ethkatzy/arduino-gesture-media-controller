@@ -1,4 +1,4 @@
-import { Audio } from "expo-av";
+import { Audio } from 'expo-av';
 
 export type Track = {
   uri: string;
@@ -34,7 +34,7 @@ class MediaPlayerImpl {
 
     const { sound, status } = await Audio.Sound.createAsync(
       { uri: this.playlist[this.currentIndex].uri },
-      { shouldPlay: true }
+      { shouldPlay: true },
     );
 
     this.sound = sound;
@@ -68,8 +68,7 @@ class MediaPlayerImpl {
   async nextTrack() {
     if (!this.playlist.length) return;
 
-    this.currentIndex =
-      (this.currentIndex + 1) % this.playlist.length;
+    this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
 
     if (this.sound) {
       await this.sound.unloadAsync();
@@ -130,7 +129,6 @@ class MediaPlayerImpl {
   getCurrentTrack() {
     if (!this.playlist.length) return null;
     return this.playlist[this.currentIndex];
-
   }
 }
 

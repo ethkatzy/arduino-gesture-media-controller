@@ -34,9 +34,9 @@ Small things, but a cluttered `git ls-files` output is a quiet red flag during a
 
 ## 4. Code cleanup
 
-- [ ] **Delete dead/commented-out code** in `app/(tabs)/index.tsx` (multiple large commented-out blocks) — dead code left in a portfolio repo reads as unfinished, even if the live code works fine.
-- [ ] **Normalize code style** — the hand-written app code (`index.tsx`, `app/media/MediaPlayer.ts`) uses double quotes and relative imports (`../media/MediaPlayer`), while the scaffolded template code uses single quotes and the `@/` alias. Pick one convention and apply it everywhere (the `eslint --fix` hook now set up in `.claude/settings.local.json` won't catch style since `eslint-config-expo` has no formatting rules — consider adding Prettier if you want this automated).
-- [ ] **Centralize the BLE protocol constants.** The service/characteristic UUIDs and device name (`"GestureBoard"`) are duplicated as magic strings in both `gesture_inference/gesture_inference.ino` and `app/(tabs)/index.tsx`. You can't share code across C++/JS, but you can put them in one clearly-commented place in each file (or a small `BLE_PROTOCOL.md`) so it's obvious they must stay in sync.
+- [x] **Delete dead/commented-out code** in `app/(tabs)/index.tsx` (multiple large commented-out blocks) — dead code left in a portfolio repo reads as unfinished, even if the live code works fine.
+- [x] **Normalize code style** — added Prettier (`.prettierrc.json`, `singleQuote: true`, `npm run format`) and ran it across `app/`, `components/`, `hooks/`, `constants/`. `index.tsx`'s cross-directory imports now use the `@/` alias to match the rest of the codebase.
+- [x] **Centralize the BLE protocol constants.** Added `BLE_PROTOCOL.md` documenting the service/characteristic UUIDs and device name, with a comment in both `gesture_inference/gesture_inference.ino` and `app/(tabs)/index.tsx` pointing to it so it's obvious they must stay in sync.
 
 ## 5. File structure
 

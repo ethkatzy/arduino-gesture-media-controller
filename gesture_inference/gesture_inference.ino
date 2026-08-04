@@ -16,6 +16,7 @@ const int   out_zero  = -128;
 
 const char* CLASS_NAMES[] = {"up", "down", "right", "left"};
 
+// Must stay in sync with app/(tabs)/index.tsx — see BLE_PROTOCOL.md
 BLEService gestureService("19B10000-E8F2-537E-4F6C-D104768A1214");
 
 BLEStringCharacteristic gestureChar("19B10001-E8F2-537E-4F6C-D104768A1214",
