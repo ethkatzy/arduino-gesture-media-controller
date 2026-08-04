@@ -1,53 +1,111 @@
-Run npx expo run:android and then wait for it to load properly
+# Gesture Media Controller
 
+A media player app controlled by hand gestures, recognized on-device by a custom TinyML model running on an Arduino Nano 33 BLE Sense and streamed to the phone over Bluetooth LE.
 
-# Welcome to your Expo app 👋
+![Expo](https://img.shields.io/badge/Expo-54-000000?logo=expo&logoColor=white)
+![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
+![TensorFlow Lite Micro](https://img.shields.io/badge/TensorFlow%20Lite-Micro-FF6F00?logo=tensorflow&logoColor=white)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Demo
 
-## Get started
+<!-- TODO: replace with an actual demo GIF/video showing a swipe gesture controlling the app -->
+> 🎥 Demo video/GIF coming soon — will show a hand swipe near the board changing volume/track on the phone in real time.
 
-1. Install dependencies
+## What it does
 
-   ```bash
-   npm install
-   ```
+Swipe a hand near the Arduino board and the connected phone reacts, live:
 
-2. Start the app
+| Gesture | Action |
+|---|---|
+| Swipe left | Play / pause |
+| Swipe right | Next track |
+| Swipe up | Volume up |
+| Swipe down | Volume down |
 
-   ```bash
-   npx expo start
-   ```
+The app itself is a small local-file media player (pick audio files from your phone, queue them, scrub, adjust volume) — gestures are just an alternate input method layered on top of it. There's also a live debug readout in the app showing BLE connection status, the last recognised gesture, and the model's confidence score.
 
-In the output, you'll find options to open the app in a
+## How it works
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```mermaid
+flowchart LR
+    subgraph fw["Arduino Nano 33 BLE Sense"]
+        imu["LSM9DS1 IMU"] --> cap["Capture 100 samples\n(triggered by motion)"]
+        cap --> tfl["TFLite Micro\ngesture classifier"]
+        tfl --> ble["BLE notify:\ngesture + confidence"]
+    end
+    ble -- "Bluetooth LE" --> app
+    subgraph app["React Native app (Expo)"]
+        rx["react-native-ble-plx"] --> map["Map gesture\nto media action"]
+        map --> player["MediaPlayer\n(expo-av)"]
+    end
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+1. The board continuously reads the onboard IMU (accelerometer + gyroscope) at 100Hz.
+2. When rotational movement crosses a threshold (`|gx|`, `|gy|`, or `|gz|` > 60°/s), it captures a 1-second window (100 samples × 6 axes).
+3. The window is normalized and quantized to `int8`, then run through a TensorFlow Lite Micro model entirely on-device.
+4. The predicted gesture (`up` / `down` / `left` / `right`) and a confidence score are broadcast over two BLE characteristics.
+5. The React Native app (via `react-native-ble-plx`) subscribes to both characteristics and maps the incoming gesture string to a media action, with a 350ms debounce so a single swipe doesn't fire twice.
 
-## Learn more
+### Model training pipeline
 
-To learn more about developing your project with Expo, look at the following resources:
+The model was trained from real recorded gesture data:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```
+getting_data.ino  →  raw IMU samples over serial (labeled per recording)
+        ↓
+TINYML.ipynb      →  trains + quantizes a TFLite Micro model
+        ↓
+model.h           →  exported as a C byte array, flashed into gesture_inference.ino
+```
 
-## Join the community
+## Project structure
 
-Join our community of developers creating universal apps.
+```
+app/                       Expo Router mobile app
+  (tabs)/index.tsx           Main screen — BLE connection, gesture→action mapping, player UI
+  media/MediaPlayer.ts       Playback engine (play/pause/next/volume/seek), wraps expo-av
+gesture_inference/
+  gesture_inference.ino     Firmware: IMU capture + on-device TFLite Micro inference + BLE broadcast
+  model.h                   Exported (generated) TFLite Micro model weights
+getting_data.ino           Firmware: records labeled IMU samples over serial for training
+TINYML.ipynb                Training notebook: raw samples → quantized TFLite Micro model
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Hardware requirements
+
+This project is split into a mobile app and a physical device — to run the full gesture-control loop you need:
+
+- An Arduino Nano 33 BLE Sense (or another board with the LSM9DS1 IMU + BLE)
+- Arduino libraries: `Arduino_LSM9DS1`, `ArduinoBLE`, TensorFlow Lite Micro for Arduino
+
+Don't have the board? The app's playback UI (add songs, play/pause, next, volume, scrubbing) still runs without it — it just won't receive gesture input. See the demo above for what the full hardware loop looks like.
+
+## Getting started (app)
+
+```bash
+npm install
+npx expo start
+```
+
+**Important:** this app uses `react-native-ble-plx`, a native BLE module, so it will **not** run in the standard Expo Go sandbox. Use `npx expo run:android` / `npx expo run:ios` (or an Expo Dev Client build) instead.
+
+Other useful scripts:
+
+```bash
+npm run lint    # expo lint
+npm run web     # expo start --web (playback UI only — no BLE on web)
+```
+
+## Getting started (firmware)
+
+1. Open `gesture_inference/gesture_inference.ino` in the Arduino IDE.
+2. Install the required libraries listed above via the Library Manager.
+3. Flash it to a Nano 33 BLE Sense. It advertises over BLE as `GestureBoard`.
+4. Launch the app — it scans for and auto-connects to `GestureBoard`.
+
+## Known limitations
+
+- Gesture set is fixed to four directional swipes (`up`/`down`/`left`/`right`).
+- The motion-trigger threshold and debounce window are hardcoded constants, tuned by hand rather than derived from a validation set.
+- BLE service/characteristic UUIDs and the device name are duplicated as literals in both the firmware and the app — they must be kept in sync manually if changed.
