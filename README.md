@@ -97,6 +97,32 @@ npm run lint    # expo lint
 npm run web     # expo start --web (playback UI only — no BLE on web)
 ```
 
+### Windows build notes
+
+Building the native Android project on Windows has a couple of gotchas:
+
+- The Android SDK path must not contain spaces — map it to a drive letter first:
+  ```powershell
+  subst S: "C:\Users\YourName\AppData\Local\Android\Sdk"
+  ```
+- Point `JAVA_HOME` at the JBR bundled with Android Studio, and set `GRADLE_USER_HOME` somewhere short to avoid Gradle cache path issues, then build:
+  ```powershell
+  $env:JAVA_HOME        = 'C:\Program Files\Android\Android Studio\jbr'
+  $env:Path             = "$env:JAVA_HOME\bin;S:\platform-tools;$env:Path"
+  $env:ANDROID_HOME     = 'S:\'
+  $env:ANDROID_SDK_ROOT = 'S:\'
+  $env:GRADLE_USER_HOME = 'C:\gradle-home'
+  adb reverse tcp:8081 tcp:8081
+  npx expo run:android --variant debug
+  ```
+- On later runs, once the APK is already installed, you only need to restart Metro:
+  ```powershell
+  adb start-server
+  adb reverse tcp:8081 tcp:8081
+  npx expo start --dev-client
+  ```
+  Then open the installed app on your phone — it connects to Metro automatically over USB. For Wi-Fi instead, make sure the phone and laptop are on the same network and scan the QR code shown in the Metro output.
+
 ## Getting started (firmware)
 
 1. Open `gesture_inference/gesture_inference.ino` in the Arduino IDE.
