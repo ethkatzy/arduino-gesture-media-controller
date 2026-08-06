@@ -9,8 +9,9 @@ A media player app controlled by hand gestures, recognized on-device by a custom
 
 ## Demo
 
-<!-- TODO: replace with an actual demo GIF/video showing a swipe gesture controlling the app -->
-> 🎥 Demo video/GIF coming soon — will show a hand swipe near the board changing volume/track on the phone in real time.
+<p align="center">
+  <img src="Demo.gif" alt="Demo" width="280">
+</p>
 
 ## What it does
 
