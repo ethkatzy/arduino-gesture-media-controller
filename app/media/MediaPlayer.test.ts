@@ -2,8 +2,8 @@ import { Audio } from 'expo-av';
 import { MediaPlayerClass } from './MediaPlayer';
 
 jest.mock('expo-av', () => {
-  function createMockSound() {
-    const state = { isPlaying: false, volume: 1, positionMillis: 0 };
+  function createMockSound(shouldPlay: boolean) {
+    const state = { isPlaying: shouldPlay, volume: 1, positionMillis: 0 };
     return {
       playAsync: jest.fn(async () => {
         state.isPlaying = true;
@@ -33,10 +33,15 @@ jest.mock('expo-av', () => {
   return {
     Audio: {
       Sound: {
-        createAsync: jest.fn(async () => ({
-          sound: createMockSound(),
-          status: { isLoaded: true, durationMillis: 10000 },
-        })),
+        createAsync: jest.fn(
+          async (
+            _source: unknown,
+            options?: { shouldPlay?: boolean },
+          ) => ({
+            sound: createMockSound(Boolean(options?.shouldPlay)),
+            status: { isLoaded: true, durationMillis: 10000 },
+          }),
+        ),
       },
     },
   };
@@ -137,5 +142,61 @@ describe('MediaPlayer', () => {
   it('reports zero position and volume before any track is loaded', async () => {
     expect(await player.getPosition()).toBe(0);
     expect(await player.getVolume()).toBe(0);
+  });
+
+  it('exposes the full playlist and current index', async () => {
+    expect(player.getPlaylist()).toEqual([]);
+    expect(player.getCurrentIndex()).toBe(0);
+
+    await player.addToPlaylist([
+      { uri: 'file://a.mp3', name: 'a.mp3' },
+      { uri: 'file://b.mp3', name: 'b.mp3' },
+    ]);
+
+    expect(player.getPlaylist()).toEqual([
+      { uri: 'file://a.mp3', name: 'a.mp3' },
+      { uri: 'file://b.mp3', name: 'b.mp3' },
+    ]);
+    expect(player.getCurrentIndex()).toBe(0);
+  });
+
+  it('jumps directly to a given playlist index and plays it', async () => {
+    await player.addToPlaylist([
+      { uri: 'file://a.mp3', name: 'a.mp3' },
+      { uri: 'file://b.mp3', name: 'b.mp3' },
+      { uri: 'file://c.mp3', name: 'c.mp3' },
+    ]);
+    await player.play();
+
+    await player.playAt(2);
+    expect(player.getCurrentIndex()).toBe(2);
+    expect(player.getCurrentTrack()).toEqual({
+      uri: 'file://c.mp3',
+      name: 'c.mp3',
+    });
+    expect(mockedCreateAsync).toHaveBeenLastCalledWith(
+      { uri: 'file://c.mp3' },
+      { shouldPlay: true },
+    );
+  });
+
+  it('ignores an out-of-range index for playAt', async () => {
+    await player.addToPlaylist([{ uri: 'file://a.mp3', name: 'a.mp3' }]);
+    await player.play();
+
+    await player.playAt(5);
+    await player.playAt(-1);
+    expect(player.getCurrentIndex()).toBe(0);
+  });
+
+  it('reports whether a track is currently playing', async () => {
+    expect(await player.isCurrentlyPlaying()).toBe(false);
+
+    await player.addToPlaylist([{ uri: 'file://a.mp3', name: 'a.mp3' }]);
+    await player.play();
+    expect(await player.isCurrentlyPlaying()).toBe(true);
+
+    await player.pause();
+    expect(await player.isCurrentlyPlaying()).toBe(false);
   });
 });

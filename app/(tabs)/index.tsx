@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
+import { useFocusEffect } from '@react-navigation/native';
 import { Buffer } from 'buffer';
 import { Audio } from 'expo-av';
 import * as DocumentPicker from 'expo-document-picker';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
   PermissionsAndroid,
@@ -278,6 +279,41 @@ export default function MainScreen() {
       managerRef.current = null;
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      async function syncFromPlayer() {
+        const current = MediaPlayer.getCurrentTrack();
+        if (cancelled) return;
+
+        if (current) {
+          setFileName(current.name);
+          await loadMetadata(current);
+        } else {
+          setFileName(null);
+        }
+
+        const [d, p, playing] = await Promise.all([
+          MediaPlayer.getDuration(),
+          MediaPlayer.getPosition(),
+          MediaPlayer.isCurrentlyPlaying(),
+        ]);
+        if (cancelled) return;
+
+        setDuration(d);
+        setPosition(p);
+        setIsPlaying(playing);
+      }
+
+      syncFromPlayer();
+
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   function flashButton(name: string) {
     setActiveButton(name);

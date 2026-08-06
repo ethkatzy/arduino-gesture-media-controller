@@ -130,6 +130,33 @@ class MediaPlayerImpl {
     if (!this.playlist.length) return null;
     return this.playlist[this.currentIndex];
   }
+
+  getPlaylist() {
+    return this.playlist;
+  }
+
+  getCurrentIndex() {
+    return this.currentIndex;
+  }
+
+  async playAt(index: number) {
+    if (index < 0 || index >= this.playlist.length) return;
+
+    this.currentIndex = index;
+
+    if (this.sound) {
+      await this.sound.unloadAsync();
+      this.sound = null;
+    }
+
+    await this.play();
+  }
+
+  async isCurrentlyPlaying() {
+    if (!this.sound) return false;
+    const status = await this.sound.getStatusAsync();
+    return status.isLoaded && status.isPlaying;
+  }
 }
 
 export { MediaPlayerImpl as MediaPlayerClass };

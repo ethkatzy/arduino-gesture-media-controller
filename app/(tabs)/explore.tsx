@@ -1,126 +1,197 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+import MediaPlayer, { type Track } from '@/app/media/MediaPlayer';
 
-export default function TabTwoScreen() {
+type UpcomingTrack = { track: Track; index: number };
+
+// Mirrors nextTrack()'s wraparound in MediaPlayer, so "up next" always
+// matches what gesture/button skips will actually play.
+function getUpcoming(playlist: Track[], currentIndex: number): UpcomingTrack[] {
+  const total = playlist.length;
+  if (total <= 1) return [];
+  return Array.from({ length: total - 1 }, (_, i) => {
+    const index = (currentIndex + 1 + i) % total;
+    return { track: playlist[index], index };
+  });
+}
+
+export default function QueueScreen() {
+  const [playlist, setPlaylist] = useState<Track[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const refresh = useCallback(() => {
+    setPlaylist(MediaPlayer.getPlaylist());
+    setCurrentIndex(MediaPlayer.getCurrentIndex());
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+      const interval = setInterval(refresh, 1000);
+      return () => clearInterval(interval);
+    }, [refresh]),
+  );
+
+  async function playTrack(index: number) {
+    try {
+      await MediaPlayer.playAt(index);
+    } finally {
+      refresh();
+    }
+  }
+
+  const currentTrack = playlist[currentIndex] ?? null;
+  const upcoming = getUpcoming(playlist, currentIndex);
+
+  if (!playlist.length) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.header}>Queue</Text>
+        <View style={styles.emptyState}>
+          <Ionicons name="musical-notes-outline" size={48} color="#555" />
+          <Text style={styles.emptyText}>
+            Your queue is empty. Add songs from the Play tab.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}
-        >
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>
-        This app includes example code to help you get started.
-      </ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{' '}
-          and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the
-          web version, press <ThemedText type="defaultSemiBold">w</ThemedText>{' '}
-          in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the{' '}
-          <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to
-          provide files for different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook
-          lets you inspect what the user&apos;s current color scheme is, and so
-          you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">
-            components/HelloWave.tsx
-          </ThemedText>{' '}
-          component uses the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The{' '}
-              <ThemedText type="defaultSemiBold">
-                components/ParallaxScrollView.tsx
-              </ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      <Text style={styles.header}>Queue</Text>
+
+      <View style={styles.nowPlayingCard}>
+        <Text style={styles.nowPlayingLabel}>Now Playing</Text>
+        <View style={styles.nowPlayingRow}>
+          <Ionicons name="musical-note" size={20} color="#4c8bf5" />
+          <Text style={styles.nowPlayingTitle} numberOfLines={1} ellipsizeMode="tail">
+            {currentTrack?.name}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.sectionTitle}>
+        Up Next{upcoming.length ? ` (${upcoming.length})` : ''}
+      </Text>
+
+      <FlatList
+        data={upcoming}
+        keyExtractor={(item) => `${item.index}-${item.track.uri}`}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <Text style={styles.emptyUpNext}>No more songs queued up.</Text>
+        }
+        renderItem={({ item, index: position }) => (
+          <TouchableOpacity
+            style={styles.trackRow}
+            onPress={() => playTrack(item.index)}
+          >
+            <Text style={styles.trackPosition}>{position + 1}</Text>
+            <Text style={styles.trackName} numberOfLines={1} ellipsizeMode="tail">
+              {item.track.name}
+            </Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#111',
   },
-  titleContainer: {
+
+  header: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 16,
+  },
+
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+
+  emptyText: {
+    color: '#888',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+
+  nowPlayingCard: {
+    backgroundColor: '#1b1b1b',
+    borderColor: '#3a3a3a',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20,
+  },
+
+  nowPlayingLabel: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 6,
+  },
+
+  nowPlayingRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+
+  nowPlayingTitle: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    flexShrink: 1,
+  },
+
+  sectionTitle: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+
+  listContent: {
+    gap: 4,
+  },
+
+  emptyUpNext: {
+    color: '#555',
+    fontStyle: 'italic',
+  },
+
+  trackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1b1b1b',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+    gap: 12,
+  },
+
+  trackPosition: {
+    color: '#4c8bf5',
+    fontWeight: 'bold',
+    width: 20,
+    textAlign: 'center',
+  },
+
+  trackName: {
+    color: 'white',
+    flexShrink: 1,
   },
 });
