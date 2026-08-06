@@ -1,6 +1,6 @@
 # BLE Protocol
 
-The Arduino firmware (`gesture_inference/gesture_inference.ino`) and the mobile app
+The Arduino firmware (`firmware/gesture_inference/gesture_inference.ino`) and the mobile app
 (`app/(tabs)/index.tsx`) talk over a custom BLE GATT service. C++ and JS can't share a
 constants file, so these values are duplicated in both places — **if you change one, change
 both**.

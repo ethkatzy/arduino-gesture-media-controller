@@ -24,7 +24,7 @@ import { isDebounced, resolveGestureAction } from '@/app/gesture/gestureAction';
 import MediaPlayer, { type Track } from '@/app/media/MediaPlayer';
 global.Buffer = Buffer;
 
-// Must stay in sync with gesture_inference/gesture_inference.ino — see BLE_PROTOCOL.md
+// Must stay in sync with firmware/gesture_inference/gesture_inference.ino — see BLE_PROTOCOL.md
 const TARGET_DEVICE_NAME = 'GestureBoard';
 const SERVICE_UUID = '19B10000-E8F2-537E-4F6C-D104768A1214';
 const GESTURE_CHAR_UUID = '19B10001-E8F2-537E-4F6C-D104768A1214';
@@ -258,6 +258,13 @@ export default function MainScreen() {
   }, []);
 
   useEffect(() => {
+    // react-native-ble-plx has no web implementation — constructing BleManager
+    // there throws immediately. Skip BLE entirely on web; the Simulate Gesture
+    // panel (dev builds only) is the intended way to drive the app there.
+    if (Platform.OS === 'web') {
+      return;
+    }
+
     managerRef.current = new BleManager();
     startBleIntegration();
 
@@ -367,6 +374,26 @@ export default function MainScreen() {
           Latest Confidence: {latestConfidence}
         </Text>
       </View>
+
+      {__DEV__ && bleStatus !== 'connected' && (
+        <View style={styles.simulateCard}>
+          <Text style={styles.simulateTitle}>Simulate Gesture (dev only)</Text>
+          <View style={styles.simulateRow}>
+            {(['up', 'down', 'left', 'right'] as const).map((gesture) => (
+              <TouchableOpacity
+                key={gesture}
+                style={styles.simulateButton}
+                onPress={() => {
+                  setLatestGesture(gesture);
+                  handleGestureAction(gesture);
+                }}
+              >
+                <Text style={styles.simulateButtonText}>{gesture}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* FILE NAME */}
       <View style={styles.songInfoContainer}>
@@ -523,6 +550,41 @@ const styles = StyleSheet.create({
   bleDebugText: {
     color: 'white',
     marginBottom: 2,
+  },
+
+  simulateCard: {
+    backgroundColor: '#1b1b1b',
+    borderColor: '#3a3a3a',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
+  },
+
+  simulateTitle: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+
+  simulateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+
+  simulateButton: {
+    flex: 1,
+    backgroundColor: '#333',
+    borderRadius: 6,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+
+  simulateButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    textTransform: 'capitalize',
   },
 
   controlsSection: {

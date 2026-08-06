@@ -7,7 +7,7 @@ Goal: someone (e.g. a hiring manager) finds this repo on GitHub, has **no Arduin
 This is the single biggest gap right now — the app is BLE-dependent on a physical Nano 33 BLE Sense, so nobody can `git clone` and just try it.
 
 - [ ] **Record a demo video/GIF** of the full loop: gesture near the board → phone reacts (volume/play-pause/next track). This is the highest-leverage item on this list — most visitors will watch a 15-second clip before reading a line of code. Embed it at the top of the README.
-- [ ] **Add a "simulate gesture" debug mode to the app.** In `app/(tabs)/index.tsx`, `handleGestureAction` already takes a gesture string and drives `MediaPlayer` — that logic doesn't care where the string came from. Add a dev-only panel (buttons for `up`/`down`/`left`/`right`) that calls `handleGestureAction` directly, bypassing BLE entirely. Gate it behind `__DEV__` or an env flag. This lets anyone run `npx expo start --web` and actually use the app with zero hardware.
+- [x] **Add a "simulate gesture" debug mode to the app.** Added a `__DEV__`-gated "Simulate Gesture" panel below the BLE status card in `app/(tabs)/index.tsx` — four buttons (`up`/`down`/`left`/`right`) call `handleGestureAction` directly, bypassing BLE entirely, and also update the `Latest Gesture` readout so the status card reacts live. `npx expo start --web` now works with zero hardware.
 - [ ] **Screenshot the actual app UI** (not the default Expo icons currently in `assets/images/`) and put 2-3 in the README.
 
 ## 2. Rewrite the README
@@ -19,7 +19,7 @@ This is the single biggest gap right now — the app is BLE-dependent on a physi
 - [x] **Repo map** — briefly explain the three parts and where they live: the mobile app (`app/`), the firmware that runs inference on-device (`gesture_inference/`), and the training pipeline (`getting_data.ino` + `TINYML.ipynb`).
 - [x] **Hardware requirements**, stated explicitly (Arduino Nano 33 BLE Sense or compatible, exact board libraries: `Arduino_LSM9DS1`, `ArduinoBLE`, TensorFlow Lite Micro for Arduino) — and immediately follow it with "no hardware? see the demo video / simulate mode above." *(links to the demo placeholder — swap in the real video/GIF and mention simulate mode once item 1 is built)*
 - [x] **Setup instructions** for the app (`npm install`, `npm run lint`, `npx expo start`) — the current README only mentions `expo run:android`. Also flagged that Expo Go won't work (`react-native-ble-plx` is a native module).
-- [ ] **Model/training summary** — what gestures are classified, roughly how much data, any accuracy numbers you have. Even approximate numbers are more convincing than none. *(README documents the pipeline; still needs real numbers from you — see `TINYML.ipynb`)*
+- [x] **Model/training summary** — README now states the 4 gesture classes and 100 samples/class training set. No accuracy numbers exist (not tracked during training), so that's called out as a known limitation instead of a fabricated number.
 - [x] Remove the leftover generic Expo boilerplate sections once the above replaces them.
 
 ## 3. Repo hygiene
@@ -42,17 +42,16 @@ Small things, but a cluttered `git ls-files` output is a quiet red flag during a
 
 Right now `getting_data.ino` and `TINYML.ipynb` sit loose at the repo root while `gesture_inference/` (the on-device firmware) has its own folder — the three concerns (app / firmware / training) aren't visually separated, which makes the repo map harder to explain at a glance.
 
-- [ ] Consider grouping into top-level folders, e.g.:
+- [x] **Grouped into top-level folders:**
   ```
-  /app/                 (already exists — the Expo/React Native app)
+  /app/                          (Expo/React Native app)
   /firmware/
-    gesture_inference/  (on-device inference sketch, currently at repo root)
-    getting_data/       (data-collection sketch)
+    gesture_inference/           (on-device inference sketch)
+    getting_data/getting_data.ino (data-collection sketch)
   /ml/
     TINYML.ipynb
-    (any saved training data / exported model artifacts)
   ```
-- [ ] Update the `add-gesture` skill (`.claude/skills/add-gesture/SKILL.md`) and README paths if you do this move.
+- [x] Updated the `add-gesture` skill (`.claude/skills/add-gesture/SKILL.md`), `README.md`, `BLE_PROTOCOL.md`, and the sync comment in `app/(tabs)/index.tsx` to point at the new paths.
 
 ## 6. Tests
 
@@ -64,11 +63,5 @@ There's currently no test framework and no test files at all. You don't need har
 
 ## 7. CI
 
-- [ ] Add a `.github/workflows/ci.yml` that runs `npm ci`, `npm run lint`, and (once added) `npm test` on every push/PR. There's currently no CI at all — even a minimal lint-on-push workflow signals the project is maintained, not abandoned.
+- [x] Added `.github/workflows/ci.yml` that runs `npm ci`, `npm run lint`, and `npm test` on every push to `main` and on every PR.
 
-## Nice-to-haves (lower priority)
-
-- [ ] Document the training pipeline in a bit more depth: how much data per gesture class, model architecture summary, any accuracy/confusion-matrix numbers from `TINYML.ipynb`.
-- [ ] A short "Known limitations" section in the README (e.g. gesture threshold tuning, BLE range/reliability) — shows self-awareness, which reads well in a portfolio context.
-- [ ] If you want to go further on the "no hardware needed" front: a short write-up or notebook cell showing the TFLite Micro model's accuracy on a held-out test set.
-- [ ] Merge the branches

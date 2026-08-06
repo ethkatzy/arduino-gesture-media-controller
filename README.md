@@ -52,12 +52,14 @@ flowchart LR
 The model was trained from real recorded gesture data:
 
 ```
-getting_data.ino  →  raw IMU samples over serial (labeled per recording)
+firmware/getting_data/getting_data.ino  →  raw IMU samples over serial (labeled per recording)
         ↓
-TINYML.ipynb      →  trains + quantizes a TFLite Micro model
+ml/TINYML.ipynb                         →  trains + quantizes a TFLite Micro model
         ↓
-model.h           →  exported as a C byte array, flashed into gesture_inference.ino
+model.h                                 →  exported as a C byte array, flashed into gesture_inference.ino
 ```
+
+The model classifies 4 gesture classes (`up` / `down` / `left` / `right`), trained on 100 recorded samples per class (400 total).
 
 ## Project structure
 
@@ -65,11 +67,14 @@ model.h           →  exported as a C byte array, flashed into gesture_inferenc
 app/                       Expo Router mobile app
   (tabs)/index.tsx           Main screen — BLE connection, gesture→action mapping, player UI
   media/MediaPlayer.ts       Playback engine (play/pause/next/volume/seek), wraps expo-av
-gesture_inference/
-  gesture_inference.ino     Firmware: IMU capture + on-device TFLite Micro inference + BLE broadcast
-  model.h                   Exported (generated) TFLite Micro model weights
-getting_data.ino           Firmware: records labeled IMU samples over serial for training
-TINYML.ipynb                Training notebook: raw samples → quantized TFLite Micro model
+firmware/
+  gesture_inference/
+    gesture_inference.ino   Firmware: IMU capture + on-device TFLite Micro inference + BLE broadcast
+    model.h                 Exported (generated) TFLite Micro model weights
+  getting_data/
+    getting_data.ino        Firmware: records labeled IMU samples over serial for training
+ml/
+  TINYML.ipynb               Training notebook: raw samples → quantized TFLite Micro model
 ```
 
 ## Hardware requirements
@@ -79,7 +84,7 @@ This project is split into a mobile app and a physical device — to run the ful
 - An Arduino Nano 33 BLE Sense (or another board with the LSM9DS1 IMU + BLE)
 - Arduino libraries: `Arduino_LSM9DS1`, `ArduinoBLE`, TensorFlow Lite Micro for Arduino
 
-Don't have the board? The app's playback UI (add songs, play/pause, next, volume, scrubbing) still runs without it — it just won't receive gesture input. See the demo above for what the full hardware loop looks like.
+Don't have the board? The app's playback UI (add songs, play/pause, next, volume, scrubbing) still runs without it. Run `npx expo start --web` and use the "Simulate Gesture" panel (dev builds only) to drive it with `up`/`down`/`left`/`right` button presses instead of a real BLE signal. See the demo above for what the full hardware loop looks like.
 
 ## Getting started (app)
 
@@ -125,7 +130,7 @@ Building the native Android project on Windows has a couple of gotchas:
 
 ## Getting started (firmware)
 
-1. Open `gesture_inference/gesture_inference.ino` in the Arduino IDE.
+1. Open `firmware/gesture_inference/gesture_inference.ino` in the Arduino IDE.
 2. Install the required libraries listed above via the Library Manager.
 3. Flash it to a Nano 33 BLE Sense. It advertises over BLE as `GestureBoard`.
 4. Launch the app — it scans for and auto-connects to `GestureBoard`.
